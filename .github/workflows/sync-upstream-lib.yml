@@ -1,0 +1,60 @@
+name: Sync lib folder from upstream
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-lib:
+    if: github.repository != 'pdcxs/tyut-thesis-template'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Set upstream repository info
+        run: |
+          echo "UPSTREAM_REPO=https://github.com/pdcxs/tyut-thesis-template.git" >> $GITHUB_ENV
+          echo "UPSTREAM_BRANCH=main" >> $GITHUB_ENV
+
+      - name: Fetch lib folder from upstream
+        run: |
+          git remote add upstream ${{ env.UPSTREAM_REPO }}
+          git fetch upstream ${{ env.UPSTREAM_BRANCH }} --depth=1
+
+      - name: Check if lib folder has changes
+        id: check_diff
+        run: |
+          if git diff --quiet FETCH_HEAD -- lib/; then
+            echo "No changes in lib folder."
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "Changes detected in lib folder."
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Apply upstream changes to lib folder
+        if: steps.check_diff.outputs.changed == 'true'
+        run: |
+          git checkout FETCH_HEAD -- lib/
+
+      - name: Create Pull Request to merge update branch into main
+        if: steps.check_diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          title: "Sync lib folder from upstream"
+          branch: update
+          base: main
+          body: |
+            自动从 [pdcxs/tyut-thesis-template](https://github.com/pdcxs/tyut-thesis-template) 同步 `lib` 文件夹的最新内容。
+            - 上游分支：`main`
+          labels: |
+            automated
+            sync
